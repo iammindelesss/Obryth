@@ -24,11 +24,42 @@ Links and files use relative paths, so the site works at its current address. Th
 
 ## Setup (in this order)
 
-1. **Run the migration.** Supabase → **SQL Editor → New query**, paste all of `supabase-migration.sql`, click **Run**. It is safe to run again and keeps existing data. It now also creates comments, favourites, follows, download history, notifications and notification preferences, with security rules on each, plus download/favourite counters on models and a `display_name` on profiles. If it stops with a message about a different `models` or `reports` table, nothing was changed; ask for help. Policy names still start with "orbrant": they are database identifiers, and keeping them means re-running replaces the old policies instead of duplicating them.
-2. **Upload the 4 site files** to GitHub (replace the old ones). Wait a couple of minutes and hard-refresh (Ctrl+Shift+R). The browser console (F12) should show `Obryth build 7`.
+1. **Run the migration (the corrected one).** Supabase → **SQL Editor → New query**, paste all of `supabase-migration.sql`, click **Run**. It is safe to run again, never deletes data, and now creates everything in the right order (the previous version tried to use the `download_count` and `favourite_count` columns before adding them, so it could not finish and the new tables were never created). It builds comments, favourites, follows, download history, notifications, preferences and the reports columns, fixes the counters, and **replaces the row-level-security policies on those tables with a reviewed set** (policies made by hand cannot be inspected from outside). If it prints a NOTICE about duplicate usernames or reports, read it and run the file again after fixing them. Then run the check in "After running the migration" below.
+2. **Upload the 4 site files** to GitHub (replace the old ones). Wait a couple of minutes and hard-refresh (Ctrl+Shift+R). The browser console (F12) should show `Obryth build 8`.
 3. **Reports email (only if not done yet):** follow "Reports and removal" below. The function's emails now say "Obryth"; re-paste `moderation-function.ts` into your existing `moderation` function and redeploy to get the new wording.
 
 Nothing needs changing in Supabase Authentication URLs, Storage buckets or the key.
+
+## Repair notes (build 8)
+
+**What was wrong**
+1. **The migration could not finish (my mistake).** The previous script created a security rule that mentioned `download_count` and `favourite_count` before it added those columns, so it stopped with an error. That is why the comments, download-history, follows and notification tables never appeared, and why you saw "column does not exist" errors. You then added some columns and `favourites` by hand, which is why only some features came back. The new script adds each column before anything uses it.
+2. **Favourites worked only half.** A hand-made `favourites` table has no counter trigger, so counts stayed at 0 and no notifications were created. The migration adds the trigger and recounts every model from the real favourite rows.
+3. **Hidden error causes.** Many messages said only "Please try again" or showed raw database text. Every database error now becomes a short, safe message (for example a missing table says the owner must run the migration) and the full detail goes to the browser console.
+4. **Reports table never inspected.** Its columns were unknown. The migration adapts it (adds missing columns, keeps existing rows) and removes any policy that lets browsers read or write reports directly.
+5. **Broken report-email links (404).** Each email link was built from the `SITE_URL` secret exactly as typed, and a wrong value (for example the old `/filamentflow/` address, which no longer exists since the repository became `Obrant`) gives a 404 on GitHub Pages. The site itself is fine: it uses `#/...` addresses, which work directly on GitHub Pages with no server rules. The function now cleans the address, loads it before sending, uses the address your website reports if `SITE_URL` fails (same website host only), and puts a loud warning in the email if neither works.
+
+**Also confirmed by reading every database call in the code:** all column names the website uses match your real tables (`profiles`: username, display_name, bio, avatar_url, created_at; `models`: all the columns you listed). Nothing uses the old `profiles.description` column, so its text is copied into `bio` where bio is empty and the column is left alone.
+
+## After running the migration (check it worked)
+
+Run these in the SQL Editor. They only read.
+```sql
+select table_name from information_schema.tables where table_schema = 'public' order by 1;
+-- expect: comments, download_events, favourites, follows, models, notification_prefs, notifications, profiles, reports
+select tablename, policyname, cmd from pg_policies where schemaname in ('public', 'storage') order by 1, 2;
+-- every policy on these tables should start with "orbrant", except any on storage you made yourself
+select id, favourite_count, download_count from public.models order by created_at desc limit 5;
+```
+Send me the output if anything looks wrong.
+
+**Old reports with broken links.** Open reports can't be recovered from old emails (only a hash of each link is stored). To make fresh links for them, run this once; it prints a working review link for each open report and invalidates the old ones:
+```sql
+with t as (select id, replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '') as tok from public.reports where status = 'open')
+update public.reports r set token_hash = encode(sha256(convert_to(t.tok, 'UTF8')), 'hex'), attempts = 0
+from t where r.id = t.id
+returning r.id, r.model_title, 'https://iammindelesss.github.io/Obrant/#/remove/' || r.id || '/' || t.tok as review_link;
+```
 
 ## Things that behave differently now
 
@@ -51,7 +82,7 @@ Sending email and checking the password must happen on a server, because those n
 4. **Add the secrets.** Edge Functions → **Secrets**, add these four:
    - `RESEND_API_KEY`: the key from step 2.
    - `ADMIN_REMOVE_PASSWORD`: a long password only you know. Never put it in any site file.
-   - `SITE_URL`: your live address with a trailing slash, e.g. `https://iammindelesss.github.io/Obrant/`
+   - `SITE_URL`: your live address, e.g. `https://iammindelesss.github.io/Obrant/`. Open it in a browser first: it must load your site, not a 404. The function tidies typos (quotes, spaces, a missing slash, `#/`, `index.html`) and **checks the address loads every time before it sends an email**.
    - `OWNER_EMAIL`: where reports go (you asked for `iammindeless@gmail.com`; check the spelling matches your Resend sign-up email).
 5. **Upload the 4 site files** to GitHub (build 6 in the console).
 6. **Test it**: with a second account, report a model. You should get an email (check spam). Open its link, try a wrong password (refused), then the right one (model removed, and gone from the library and Storage).
@@ -80,11 +111,10 @@ How it is protected: the link holds a random 64-character token, and only a hash
 
 ## Test report for this version
 
-- **Server function:** 24 logic checks against a fake in-memory database (not real Supabase or Resend) passed.
-- **Browser checks against a stand-in for Supabase (not the real service):** 103 checks passed, covering page switching, the notification bell (badge, mark one/all read, empty state, navigation), comments (post, edit, delete, permissions), favourites, download order (signed link first, then the server count), profiles and follows, creator search, library filters and sorts, dashboard, Settings, the profile editor, no old brand names visible on 12 pages, no sideways scrolling on 9 pages at phone width, and no console errors.
-- **Found and fixed during testing:** a wide file picker on the phone profile page.
-- **Not tested by me:** the real Supabase project. The new SQL (tables, triggers, security rules, the download function) has never been run, and I had no way to syntax-check it. Sign-in, uploads, storage, downloads, notifications created by database triggers, and every security rule are unverified until you run the checklist above.
-- **Not built in this version:** replies to comments, reporting individual comments or profiles, editing a model's details or thumbnail in the site (the database allows it), recently viewed models, Recently Added and Popular strips, follower and following lists, a Following feed, saved calculator presets, account deletion, profile visibility settings, creator view-count analytics, realtime notifications, 3D preview and payments.
+- **Server function:** 41 logic checks against a fake database and a fake email service (not real Supabase or Resend), all passing. They cover report limits and permissions, token hashing, wrong token/password refusal, the 8-attempt lock, removal deleting the row and both files, and the email links: the link is `SITE_URL` + `#/remove/<report id>/<token>` with the real id; messy `SITE_URL` values (no slash, quotes, `#/`, `index.html`, no `https://`) are cleaned; an old 404 address falls back to the address the site reported; a different host is never used; an unusable address produces a warning in the email instead of a silent dead link; and the id and token in an email open exactly that report (changing one character is refused).
+- **Browser checks against a stand-in for Supabase (not the real service):** 129 checks passing, including every feature from the last version, clear error messages (missing table or column, security-rule refusals, expired session, network, and unknown errors never showing raw database text), the retry button, failed comments keeping their text, and opening an email-style link directly (`#/remove/<id>/<token>`) which shows the review page, calls the server with exactly that id and token, and links to the model. Routing is hash-only, so GitHub Pages needs no fallback rules.
+- **Not tested by me, and the reason:** I could not open your live site, so I could not click a real email link or confirm what `SITE_URL` holds. I could only confirm that the old `.../filamentflow/` address now fails. I also could not run the SQL (no database available, no syntax checker), so the migration, the triggers, the security rules, real uploads, downloads, favourites, comments, notifications and the real Resend email are all unverified until you run the steps above and the checklist.
+- **Not built:** replies to comments, reporting individual comments or profiles, editing a model in the site, recently viewed, Recently Added and Popular strips, follower lists, a Following feed, calculator presets, account deletion, realtime notifications, 3D preview, payments.
 
 ## Calculator formulas
 
