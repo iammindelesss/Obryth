@@ -9,7 +9,22 @@ const FF_CONFIG = {
   SUPABASE_URL: 'https://uiydxoajlzxmxuewkezi.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_QEzWH4F1CVBnsFnFrUf0Mw_3Gnt5S9r'
 };
-const FF_BUILD = 'build 7';
+const FF_BUILD = 'build 8';
+
+// Turns a Supabase error into a short, safe message for the page, and logs the technical detail to the console.
+// (Passwords, tokens and private file addresses are never logged.)
+function dbError(err, what) {
+  const code = (err && err.code) || '', msg = (err && err.message) || '';
+  console.error('Obryth: could not ' + what + ' | code ' + (code || 'none') + ' | ' + msg);
+  if (/^(PGRST20[45]|PGRST200|42P01|42703)$/.test(code) || /schema cache|does not exist|relationship/i.test(msg)) {
+    return 'The database is missing something this feature needs (code ' + (code || 'unknown') + '). The site owner needs to run the latest supabase-migration.sql.';
+  }
+  if (code === '42501' || /row-level security|permission denied/i.test(msg)) return 'You don’t have permission to do that. Try signing out and in again.';
+  if (code === 'PGRST301' || /jwt (expired|invalid)/i.test(msg)) return 'Your session has expired. Please sign in again.';
+  if (code === '23503') return 'That item no longer exists.';
+  if (/failed to fetch|networkerror|load failed/i.test(msg)) return 'Could not reach the server. Check your connection and try again.';
+  return 'Something went wrong. Please try again.';
+}
 
 /* ---------- Part 1: calculations ---------- */
 
@@ -305,7 +320,7 @@ if (typeof document !== 'undefined') (function () {
     const from = state.page * LIMITS.pageSize;
     const res = await q.range(from, from + LIMITS.pageSize - 1);
     state.loading = false;
-    if (res.error) { say('libError', 'Could not load models: ' + res.error.message, 'err'); $('retryBtn').hidden = false; $('count').textContent = ''; return; }
+    if (res.error) { say('libError', 'Could not load models. ' + dbError(res.error, 'load models'), 'err'); $('retryBtn').hidden = false; $('count').textContent = ''; return; }
     state.items = state.items.concat(res.data || []);
     state.total = res.count || 0;
     state.page++;
@@ -347,7 +362,7 @@ if (typeof document !== 'undefined') (function () {
     const res = await c.from('models').select(COLS + ',file_path').eq('id', id).maybeSingle();
     v.innerHTML = '';
     const back = el('a', 'back', '← All models'); back.href = '#/library'; v.appendChild(back);
-    if (res.error || !res.data) { v.appendChild(el('p', 'empty', res.error ? 'Could not load this model: ' + res.error.message : 'This model was not found, or is not published.')); return; }
+    if (res.error || !res.data) { v.appendChild(el('p', 'empty', res.error ? 'Could not load this model. ' + dbError(res.error, 'load a model') : 'This model was not found, or is not published.')); return; }
     const m = res.data;
     v.appendChild(el('h2', '', m.title));
     const wrap = el('div', 'detail');
@@ -454,7 +469,7 @@ if (typeof document !== 'undefined') (function () {
       say('upMsg', 'Upload complete. Your model is now live in the Model Library. You can manage it from your Creator dashboard.', 'ok');
     } catch (err) {
       for (let i = 0; i < uploaded.length; i++) { try { await c.storage.from(uploaded[i][0]).remove([uploaded[i][1]]); } catch (x) { /* best effort */ } }
-      say('upMsg', 'Upload failed, and nothing was saved: ' + (err && err.message ? err.message : 'unknown error'), 'err');
+      say('upMsg', 'Upload failed, and nothing was saved. ' + dbError(err, 'upload a model'), 'err');
     } finally { uploading = false; $('upBtn').disabled = false; }
   }
 
@@ -484,7 +499,7 @@ if (typeof document !== 'undefined') (function () {
     [l1, c1, l2, c2, go, out].forEach(function (n) { f.appendChild(n); });
     f.addEventListener('submit', async function (e) {
       e.preventDefault(); go.disabled = true; out.hidden = true;
-      try { await callMod({ action: 'report', model_id: m.id, reason: sel.value, details: ta.value }); out.textContent = 'Thank you. Your report has been sent.'; out.className = 'msg ok'; ta.value = ''; }
+      try { await callMod({ action: 'report', model_id: m.id, reason: sel.value, details: ta.value, site: location.origin + location.pathname.replace(/index\.html$/, '') }); out.textContent = 'Thank you. Your report has been sent.'; out.className = 'msg ok'; ta.value = ''; }
       catch (err) { out.textContent = err.message; out.className = 'msg err'; }
       out.hidden = false; go.disabled = false;
     });
@@ -499,7 +514,12 @@ if (typeof document !== 'undefined') (function () {
     let info;
     try { info = await callMod({ action: 'lookup', report_id: id, token: token }); } catch (e) { say('rmMsg', e.message, 'err'); return; }
     const dl = $('rmInfo'); dl.innerHTML = '';
-    [['Model', info.model_title], ['Reason', info.reason], ['Details', info.details || 'None'], ['Report status', info.status + (info.model_exists ? '' : ' (model no longer exists)')]].forEach(function (r) { dl.appendChild(el('dt', '', r[0])); dl.appendChild(el('dd', '', r[1])); });
+    dl.appendChild(el('dt', '', 'Model'));
+    const dd = el('dd');
+    if (info.model_exists && info.model_id) { const a = el('a', '', info.model_title || 'View the model'); a.href = '#/library/' + info.model_id; dd.appendChild(a); } else dd.textContent = (info.model_title || 'Unknown') + ' (no longer exists)';
+    dl.appendChild(dd);
+    dl.appendChild(el('dt', '', 'Report status')); dl.appendChild(el('dd', '', info.status));
+    dl.appendChild(el('dt', '', 'Reason and details')); dl.appendChild(el('dd', '', 'These are in your report email. They are not shown on this page.'));
     rmCtx = { id: id, token: token };
     if (info.status !== 'open') { say('rmMsg', 'This report was already resolved (' + info.status + ').', 'ok'); return; }
     say('rmMsg', '');
@@ -526,7 +546,7 @@ if (typeof document !== 'undefined') (function () {
     host.textContent = 'Loading your listings…';
     const res = await c.from('models').select('id,title,status,listing_type,price,created_at,download_count,favourite_count').eq('creator_id', user.id).order('created_at', { ascending: false });
     host.innerHTML = '';
-    if (res.error) { host.appendChild(el('p', 'msg err', 'Could not load your listings: ' + res.error.message)); return; }
+    if (res.error) { host.appendChild(el('p', 'msg err', 'Could not load your listings. ' + dbError(res.error, 'load your listings'))); return; }
     if (!res.data.length) { host.appendChild(el('p', 'empty', 'You haven’t uploaded any models yet.')); return; }
     res.data.forEach(function (m) {
       const row = el('div', 'listing-row');
@@ -546,7 +566,7 @@ if (typeof document !== 'undefined') (function () {
     btn.disabled = true;
     const sel = await c.from('models').select('file_path,thumbnail_path').eq('id', id).single();
     const del = await c.from('models').delete().eq('id', id);
-    if (del.error) { say('dashMsg', 'Could not delete: ' + del.error.message, 'err'); btn.disabled = false; return; }
+    if (del.error) { say('dashMsg', 'Could not delete. ' + dbError(del.error, 'delete a listing'), 'err'); btn.disabled = false; return; }
     if (sel.data) {
       const rm1 = await c.storage.from('model-files').remove([sel.data.file_path]);
       const rm2 = sel.data.thumbnail_path ? await c.storage.from('model-previews').remove([sel.data.thumbnail_path]) : { error: null };
@@ -649,7 +669,7 @@ if (typeof document !== 'undefined') (function () {
   async function loadProfile() {
     if (!sb || !user) return;
     const res = await sb.from('profiles').select('username,display_name,bio,avatar_url').eq('id', user.id).maybeSingle();
-    if (res.error) { say('profMsg', 'Could not load your profile: ' + res.error.message, 'err'); return; }
+    if (res.error) { say('profMsg', 'Could not load your profile. ' + dbError(res.error, 'load your profile'), 'err'); return; }
     profile = res.data || {};
     fillProfile();
     renderAcct();
@@ -734,7 +754,7 @@ if (typeof document !== 'undefined') (function () {
     const displayName = $('dispName').value.trim().slice(0, 40);
     const res = await sb.from('profiles').upsert({ id: user.id, username: username, display_name: displayName || null, bio: bio });
     busy(e.target, false);
-    if (res.error) { say('profMsg', res.error.code === '23505' ? 'That username is already taken.' : 'Could not save: ' + res.error.message, 'err'); return; }
+    if (res.error) { say('profMsg', res.error.code === '23505' ? 'That username is already taken.' : 'Could not save. ' + dbError(res.error, 'save your profile'), 'err'); return; }
     profile = Object.assign({}, profile, { username: username, display_name: displayName || null, bio: bio });
     renderAcct();
     say('profMsg', 'Profile saved.', 'ok');
@@ -746,10 +766,10 @@ if (typeof document !== 'undefined') (function () {
     if (file.size > 2 * 1024 * 1024) { say('profMsg', 'That image is over 2 MB. Choose a smaller one.', 'err'); return; }
     const path = user.id + '/avatar';
     const up = await sb.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
-    if (up.error) { say('profMsg', 'Upload failed: ' + up.error.message, 'err'); return; }
+    if (up.error) { say('profMsg', 'Upload failed. ' + dbError(up.error, 'upload a profile picture'), 'err'); return; }
     const url = sb.storage.from('avatars').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
     const res = await sb.from('profiles').upsert({ id: user.id, avatar_url: url });
-    if (res.error) { say('profMsg', 'Could not save the picture: ' + res.error.message, 'err'); return; }
+    if (res.error) { say('profMsg', 'Could not save the picture. ' + dbError(res.error, 'save a profile picture'), 'err'); return; }
     profile = Object.assign({}, profile, { avatar_url: url });
     fillProfile();
     say('profMsg', 'Profile picture updated.', 'ok');
@@ -836,7 +856,7 @@ if (typeof document !== 'undefined') (function () {
     const out = await Promise.all([
       c.from('notifications').select('id,type,model_id,read_at,created_at,actor:profiles!actor_id(username,avatar_url),model:models(title)').eq('user_id', u.id).order('created_at', { ascending: false }).limit(30),
       c.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', u.id).is('read_at', null)]);
-    if (out[0].error) return; // keep what is shown if the request fails
+    if (out[0].error) { dbError(out[0].error, 'load notifications'); return; } // keep what is shown if the request fails
     bell.items = out[0].data || [];
     bell.unread = out[1].error ? bell.items.filter(function (n) { return !n.read_at; }).length : (out[1].count || 0);
     renderBell();
@@ -914,7 +934,7 @@ if (typeof document !== 'undefined') (function () {
         fav.disabled = true;
         const res = saved ? await c.from('favourites').delete().eq('user_id', u.id).eq('model_id', m.id) : await c.from('favourites').insert({ user_id: u.id, model_id: m.id });
         fav.disabled = false;
-        if (res.error) { say('dlMsg', 'Could not update your favourites. Please try again.', 'err'); return; }
+        if (res.error) { say('dlMsg', 'Could not update your favourites. ' + dbError(res.error, 'update a favourite'), 'err'); return; }
         saved = !saved; m.favourite_count = Math.max(0, (m.favourite_count || 0) + (saved ? 1 : -1)); paint();
       });
     }
@@ -933,7 +953,7 @@ if (typeof document !== 'undefined') (function () {
         post.disabled = true; err.hidden = true;
         const res = await c.from('comments').insert({ model_id: m.id, author_id: u.id, body: body });
         post.disabled = false;
-        if (res.error) { err.textContent = 'Could not post your comment. Please try again.'; err.hidden = false; return; }
+        if (res.error) { err.textContent = 'Could not post your comment. ' + dbError(res.error, 'post a comment'); err.hidden = false; return; }
         ta.value = ''; load();
       });
     } else { const l = el('a', 'btn', 'Sign in to comment'); l.href = '#/auth/signin'; sec.appendChild(l); }
@@ -943,7 +963,7 @@ if (typeof document !== 'undefined') (function () {
       list.textContent = 'Loading comments…';
       const r = await c.from('comments').select('id,body,created_at,edited_at,author_id,profiles(username,avatar_url)').eq('model_id', m.id).order('created_at', { ascending: true }).limit(100);
       list.innerHTML = '';
-      if (r.error) { err.textContent = 'Could not load comments.'; err.hidden = false; return; }
+      if (r.error) { err.textContent = 'Could not load comments. ' + dbError(r.error, 'load comments'); err.hidden = false; return; }
       head.textContent = 'Comments (' + r.data.length + ')';
       if (!r.data.length) { list.appendChild(el('p', 'empty small', 'No comments yet. Be the first to comment.')); return; }
       r.data.forEach(function (cm) { list.appendChild(commentRow(cm)); });
@@ -970,7 +990,7 @@ if (typeof document !== 'undefined') (function () {
             if (!t) { err.textContent = 'A comment cannot be empty.'; err.hidden = false; return; }
             save.disabled = true;
             const res = await c.from('comments').update({ body: t }).eq('id', cm.id);
-            if (res.error) { err.textContent = 'Could not save your edit.'; err.hidden = false; save.disabled = false; return; }
+            if (res.error) { err.textContent = 'Could not save your edit. ' + dbError(res.error, 'edit a comment'); err.hidden = false; save.disabled = false; return; }
             err.hidden = true; load();
           });
         });
@@ -981,7 +1001,7 @@ if (typeof document !== 'undefined') (function () {
         del.addEventListener('click', async function () {
           if (!window.confirm('Delete this comment?')) return;
           const res = await c.from('comments').delete().eq('id', cm.id);
-          if (res.error) { err.textContent = 'Could not delete the comment.'; err.hidden = false; return; }
+          if (res.error) { err.textContent = 'Could not delete the comment. ' + dbError(res.error, 'delete a comment'); err.hidden = false; return; }
           load();
         });
         bar.appendChild(del);
@@ -1001,7 +1021,7 @@ if (typeof document !== 'undefined') (function () {
     if (!/^[a-z0-9_]{3,20}$/.test(uname)) { say('pfMsg', 'This profile was not found.', 'err'); return; }
     say('pfMsg', 'Loading profile…');
     const pr = await c.from('profiles').select('id,username,display_name,bio,avatar_url,created_at').eq('username', uname).maybeSingle();
-    if (pr.error) { say('pfMsg', 'Could not load this profile. Please try again.', 'err'); return; }
+    if (pr.error) { say('pfMsg', 'Could not load this profile. ' + dbError(pr.error, 'load a profile'), 'err'); return; }
     if (!pr.data) { say('pfMsg', 'This profile was not found.', 'err'); return; }
     const p = pr.data, u = me();
     const out = await Promise.all([
@@ -1035,7 +1055,7 @@ if (typeof document !== 'undefined') (function () {
         fb.disabled = true;
         const res = isFollowing ? await c.from('follows').delete().eq('follower_id', u.id).eq('followee_id', p.id) : await c.from('follows').insert({ follower_id: u.id, followee_id: p.id });
         fb.disabled = false;
-        if (res.error) { say('pfMsg', 'Could not update follow. Please try again.', 'err'); return; }
+        if (res.error) { say('pfMsg', 'Could not update follow. ' + dbError(res.error, 'follow or unfollow'), 'err'); return; }
         say('pfMsg', ''); isFollowing = !isFollowing; followers += isFollowing ? 1 : -1; fEl.textContent = String(followers); paint();
       });
     }
@@ -1055,7 +1075,7 @@ if (typeof document !== 'undefined') (function () {
     $('pCount').textContent = 'Searching…';
     const r = await sb().from('profiles').select('username,display_name,bio,avatar_url').or('username.ilike.%' + term + '%,display_name.ilike.%' + term + '%').not('username', 'is', null).order('username').limit(20);
     if (token !== pToken) return;
-    if (r.error) { $('pCount').textContent = ''; say('pErr', 'Search failed. Please try again.', 'err'); return; }
+    if (r.error) { $('pCount').textContent = ''; say('pErr', 'Search failed. ' + dbError(r.error, 'search creators'), 'err'); return; }
     $('pCount').textContent = r.data.length ? r.data.length + (r.data.length === 20 ? '+ people' : r.data.length === 1 ? ' person' : ' people') : 'No creators match “' + term + '”.';
     r.data.forEach(function (p) {
       const a = el('a', 'person'); a.href = '#/u/' + p.username;
@@ -1078,10 +1098,10 @@ if (typeof document !== 'undefined') (function () {
       c.from('download_events').select('created_at,models(id,title)').eq('user_id', u.id).order('created_at', { ascending: false }).limit(50)]);
     fh.innerHTML = ''; dh.innerHTML = '';
     const fav = out[0], dl = out[1];
-    if (fav.error) fh.appendChild(el('p', 'msg err', 'Could not load your favourites.'));
+    if (fav.error) fh.appendChild(el('p', 'msg err', 'Could not load your favourites. ' + dbError(fav.error, 'load favourites')));
     else if (!fav.data.length) fh.appendChild(el('p', 'empty small', 'No favourites yet. Open a model and press Favourite to save it here.'));
     else fav.data.forEach(function (f) { if (!f.models) return; const r = el('div', 'listing-row'); const a = el('a', '', f.models.title); a.href = '#/library/' + f.models.id; r.appendChild(a); r.appendChild(el('span', 'tag', f.models.listing_type)); fh.appendChild(r); });
-    if (dl.error) dh.appendChild(el('p', 'msg err', 'Could not load your download history.'));
+    if (dl.error) dh.appendChild(el('p', 'msg err', 'Could not load your download history. ' + dbError(dl.error, 'load download history')));
     else if (!dl.data.length) dh.appendChild(el('p', 'empty small', 'You haven’t downloaded any models yet.'));
     else dl.data.forEach(function (d) { if (!d.models) return; const r = el('div', 'listing-row'); const a = el('a', '', d.models.title); a.href = '#/library/' + d.models.id; r.appendChild(a); r.appendChild(el('small', '', when(d.created_at))); dh.appendChild(r); });
   }
@@ -1089,7 +1109,7 @@ if (typeof document !== 'undefined') (function () {
     const u = me();
     if (!u || !window.confirm('Clear your download history? Models’ download counts will not change.')) return;
     const res = await sb().from('download_events').delete().eq('user_id', u.id);
-    say('dashMsg', res.error ? 'Could not clear your history.' : 'Download history cleared.', res.error ? 'err' : 'ok');
+    say('dashMsg', res.error ? 'Could not clear your history. ' + dbError(res.error, 'clear download history') : 'Download history cleared.', res.error ? 'err' : 'ok');
     loadDashboard();
   });
 
@@ -1107,7 +1127,7 @@ if (typeof document !== 'undefined') (function () {
       const u = me(); if (!u) return;
       const row = { user_id: u.id }; KINDS.forEach(function (x) { row[x] = $('np_' + x).checked; });
       const res = await sb().from('notification_prefs').upsert(row);
-      $('prefMsg').textContent = res.error ? 'Could not save your preferences.' : 'Preferences saved.';
+      $('prefMsg').textContent = res.error ? 'Could not save your preferences. ' + dbError(res.error, 'save notification preferences') : 'Preferences saved.';
     });
   });
   $('pwReset').addEventListener('click', async function () {
