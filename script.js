@@ -9,7 +9,7 @@ const FF_CONFIG = {
   SUPABASE_URL: 'https://uiydxoajlzxmxuewkezi.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_QEzWH4F1CVBnsFnFrUf0Mw_3Gnt5S9r'
 };
-const FF_BUILD = 'build 8';
+const FF_BUILD = 'build 9';
 
 // Turns a Supabase error into a short, safe message for the page, and logs the technical detail to the console.
 // (Passwords, tokens and private file addresses are never logged.)
@@ -1138,14 +1138,57 @@ if (typeof document !== 'undefined') (function () {
     $('pwMsg').textContent = res.error ? 'Could not send the email. Please try again later.' : 'Check your inbox for a password reset link (open it in this browser).';
   });
 
+  async function loadHomeStats() {
+    const c = sb(), out = $('libCount');
+    if (!c || !out) return;
+    const r = await c.from('models').select('id', { count: 'exact', head: true }).eq('status', 'published');
+    if (r.error) { dbError(r.error, 'count published models'); out.hidden = true; return; }
+    out.textContent = r.count ? r.count + (r.count === 1 ? ' model' : ' models') + ' shared so far' : 'No models yet. Be the first to upload one.';
+    out.hidden = false;
+  }
+
   function onRoute(view, parts) {
     if (me()) refreshBell();
+    if (view === 'home') loadHomeStats();
     if (view === 'profile') showProfile(parts[1]);
     if (view === 'people') $('pq').focus();
     if (view === 'dashboard' && me()) loadDashboard();
     if (view === 'settings') loadPrefs();
   }
   window.FFCommunity = { decorateDetail: decorateDetail, onRoute: onRoute };
+})();
+
+/* ---------- Part 7: homepage motion (all of it optional: the page works without it) ---------- */
+if (typeof document !== 'undefined') (function () {
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  // Scroll reveals
+  const items = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window && !calm) {
+    const io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: 0.12 });
+    items.forEach(function (el) { io.observe(el); });
+  } else items.forEach(function (el) { el.classList.add('in'); });
+  // Hero logo: a small, gentle tilt that follows the pointer (mouse only; touch screens get a slow float from CSS instead)
+  const hero = document.getElementById('hero'), stage = document.getElementById('logoStage');
+  if (hero && stage && finePointer && !calm) {
+    hero.addEventListener('pointermove', function (e) {
+      const r = stage.getBoundingClientRect();
+      const x = (e.clientX - (r.left + r.width / 2)) / window.innerWidth, y = (e.clientY - (r.top + r.height / 2)) / window.innerHeight;
+      stage.style.setProperty('--ry', (x * 8).toFixed(2) + 'deg');
+      stage.style.setProperty('--rx', (-y * 6).toFixed(2) + 'deg');
+    });
+    hero.addEventListener('pointerleave', function () { stage.style.setProperty('--rx', '0deg'); stage.style.setProperty('--ry', '0deg'); });
+  }
+  // Product cards: a soft silver light follows the pointer (tapping or keyboard focus lights the card too, from CSS)
+  document.querySelectorAll('.pcard').forEach(function (card) {
+    card.addEventListener('pointermove', function (e) {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+      card.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    });
+  });
 })();
 
 /* ---------- Part 4: page switching (#/library, #/calculator, #/shop) ---------- */
@@ -1157,6 +1200,7 @@ if (typeof document !== 'undefined') (function () {
     if (hash && hash.indexOf('#/') !== 0) return; // ignore other anchors such as the skip link
     const parts = hash.replace(/^#\/?/, '').split('/');
     if (parts[0] === 'u') parts[0] = 'profile';
+    const section = (parts[0] === 'products' || parts[0] === 'about') ? parts[0] : null; // sections of the home page
     const view = VIEWS.indexOf(parts[0]) >= 0 ? parts[0] : 'home';
     if (window.FFAuth) {
       if (view !== 'auth') window.FFAuth.remember(hash || '#/');
@@ -1165,7 +1209,7 @@ if (typeof document !== 'undefined') (function () {
     document.getElementById('acctMenu').open = false;
     VIEWS.forEach(function (n) { document.querySelector('[data-view="' + n + '"]').hidden = n !== view; });
     document.querySelectorAll('#nav a[data-link]').forEach(function (a) {
-      if (a.dataset.link === view) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+      if (a.dataset.link === (section || view)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
     if (view === 'library') window.FFLibrary.show(parts);
     if (view === 'remove') window.FFLibrary.showRemove(parts[1], parts[2]);
@@ -1173,7 +1217,8 @@ if (typeof document !== 'undefined') (function () {
     if (view === 'dashboard' && window.FFAuth && window.FFAuth.user()) window.FFLibrary.loadMine();
     if (window.FFAuth) window.FFAuth.show(view, parts);
     document.title = TITLES[view];
-    window.scrollTo(0, 0);
+    const target = section && document.getElementById(section);
+    if (target) target.scrollIntoView(); else window.scrollTo(0, 0);
   }
   document.getElementById('clearCalc').addEventListener('click', function () {
     if (window.FFCalcReset) window.FFCalcReset();

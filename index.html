@@ -4,24 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Obryth – 3D-printing platform</title>
-<meta name="description" content="Obryth: a 3D-printing platform with a model library, a print cost calculator and, soon, a desktop app.">
-<meta property="og:title" content="Obryth – 3D-printing platform">
-<meta property="og:description" content="Browse and share 3D-printable models and price your prints with the Obryth Calculator.">
+<meta name="description" content="Obryth builds software and digital experiences: a 3D-printing model library, a print cost calculator and, soon, the Obryth Studio desktop app.">
+<meta property="og:title" content="Obryth – Ideas into experiences">
+<meta property="og:description" content="Thoughtfully designed software and digital experiences, built to turn ambitious ideas into something real.">
 <meta property="og:type" content="website">
-<link rel="stylesheet" href="style.css?v=8">
+<meta name="theme-color" content="#090A0C">
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-header">
   <div class="wrap bar">
-    <a class="brand" href="#/">Obryth</a>
+    <a class="brand" href="#/" aria-label="Obryth home"><picture><source srcset="assets/obryth-logo-sm.webp" type="image/webp"><img class="brand-logo" src="assets/obryth-logo-sm.png" alt="Obryth" width="360" height="225"></picture></a>
     <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
     <nav id="nav" class="nav" aria-label="Main">
-      <a href="#/" data-link="home">Home</a>
-      <a href="#/calculator" data-link="calculator">Calculator</a>
+      <a href="#/products" data-link="products">Products</a>
       <a href="#/library" data-link="library">Model Library</a>
+      <a href="#/calculator" data-link="calculator">Calculator</a>
       <a href="#/studio" data-link="studio">Obryth Studio</a>
-      <a href="#/settings" data-link="settings">Settings</a>
+      <a href="#/about" data-link="about">About</a>
       <span class="acct" id="acct">
         <span class="guest-only"><a class="btn" href="#/auth/signin">Sign in</a> <a class="btn primary" href="#/auth/register">Create account</a></span>
         <span class="user-only bell-wrap">
@@ -36,7 +42,7 @@
         </span>
         <details class="user-only menu" id="acctMenu">
           <summary class="btn" id="acctName">Account</summary>
-          <div class="menu-list"><a href="#/account">User Profile</a><a href="#/people">Find creators</a><a href="#/dashboard">Creator dashboard</a><button type="button" id="signOutBtn">Sign out</button></div>
+          <div class="menu-list"><a href="#/account">User Profile</a><a href="#/settings">Settings</a><a href="#/people">Find creators</a><a href="#/dashboard">Creator dashboard</a><button type="button" id="signOutBtn">Sign out</button></div>
         </details>
       </span>
     </nav>
@@ -46,33 +52,95 @@
 <main id="main">
 <!-- ===== HOME ===== -->
 <div data-view="home">
-  <section class="hero">
-    <div class="wrap">
-      <h1>Find it. Print it. Price it.</h1>
-      <p>Obryth is a home for 3D printing: a model library to browse and share, a calculator to price your prints, and a desktop app, Obryth Studio, in development. Pick where to start.</p>
-      <p class="hero-actions guest-only"><a class="btn primary" href="#/auth/register">Create account</a> <a class="btn" href="#/auth/signin">Sign in</a></p>
-      <p class="hero-actions user-only"><a class="btn primary" href="#/account">User Profile</a> <a class="btn" href="#/dashboard">Creator dashboard</a></p>
+  <section class="hero2" id="hero" aria-labelledby="heroTitle">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="wrap hero-inner">
+      <div class="logo-wrap">
+        <div class="logo-glow" aria-hidden="true"></div>
+        <div class="logo-stage" id="logoStage">
+        <picture><source srcset="assets/obryth-logo.webp" type="image/webp"><img class="hero-logo" src="assets/obryth-logo.png" alt="Obryth: a silver split-ring emblem above the Obryth wordmark" width="730" height="457" fetchpriority="high" decoding="async"></picture>
+        </div>
+      </div>
+      <h1 class="hero-title" id="heroTitle">Ideas into experiences.</h1>
+      <p class="hero-copy">Thoughtfully designed software and digital experiences, built to turn ambitious ideas into something real.</p>
+      <div class="hero-cta">
+        <a class="btn primary lg" href="#/products">Explore Products</a>
+        <a class="btn ghost lg" href="#/studio">Discover Obryth Studio</a>
+      </div>
+      <p class="hero-note guest-only">New to Obryth? <a href="#/auth/register">Create an account</a> or <a href="#/auth/signin">sign in</a>.</p>
+      <p class="hero-note user-only">Welcome back. <a href="#/account">User Profile</a> · <a href="#/dashboard">Creator dashboard</a></p>
     </div>
   </section>
-  <section class="wrap tiles" aria-label="Sections">
-    <a class="tile" href="#/library">
-      <span class="status ok">Beta</span>
-      <h2>Model Library</h2>
-      <p>Browse and download 3D models shared by creators. Sign in to upload your own. Anyone signed in can report a model.</p>
-      <span class="go">Open library →</span>
-    </a>
-    <a class="tile" href="#/calculator">
-      <span class="status ok">Working</span>
-      <h2>Calculator</h2>
-      <p>Work out filament, electricity and other costs, then set a selling price and see your real profit margin.</p>
-      <span class="go">Open calculator →</span>
-    </a>
-    <a class="tile" href="#/studio">
-      <span class="status">Coming soon</span>
-      <h2>Obryth Studio</h2>
-      <p>A separate desktop application. No release exists yet, so there is nothing to download.</p>
-      <span class="go">Learn more →</span>
-    </a>
+
+  <section class="section" id="products" aria-labelledby="productsTitle">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <h2 id="productsTitle">Software worth exploring.</h2>
+        <p>Discover the tools and experiences taking shape at Obryth.</p>
+      </div>
+      <div class="products">
+        <a class="pcard pcard-lg reveal" href="#/studio">
+          <div class="pvisual" aria-hidden="true"><span class="pv-lines"></span><picture><source srcset="assets/obryth-emblem.webp" type="image/webp"><img class="pv-emblem" src="assets/obryth-emblem.png" alt="" width="380" height="380" loading="lazy"></picture></div>
+          <div class="pbody">
+            <span class="status">Coming soon</span>
+            <h3>Obryth Studio</h3>
+            <p>A separate desktop application from Obryth. No release exists yet, so there is nothing to download.</p>
+            <span class="go">Discover Obryth Studio <span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+        <a class="pcard reveal" href="#/library">
+          <div class="pvisual" aria-hidden="true"><div class="lib-visual"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+          <div class="pbody">
+            <span class="status ok">Beta</span>
+            <h3>Obryth Model Library</h3>
+            <p>Browse, share and download 3D-printable models.</p>
+            <span class="pmeta" id="libCount" hidden></span>
+            <span class="go">Open the library <span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+        <a class="pcard reveal" href="#/calculator">
+          <div class="pvisual" aria-hidden="true"><picture><source srcset="assets/preview-calculator.webp" type="image/webp"><img class="pv-shot" src="assets/preview-calculator.png" alt="" width="780" height="430" loading="lazy"></picture></div>
+          <div class="pbody">
+            <span class="status ok">Working</span>
+            <h3>Obryth Calculator</h3>
+            <p>Work out filament, electricity and other costs, then set a price and see your real margin.</p>
+            <span class="go">Open the calculator <span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt" id="about" aria-labelledby="aboutTitle">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <h2 id="aboutTitle">Built with intention.</h2>
+        <p>Three principles guide how Obryth products are designed and made.</p>
+      </div>
+      <div class="principles">
+        <article class="principle reveal">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="24"/><circle cx="32" cy="32" r="14"/><path d="M32 4v12M32 48v12M4 32h12M48 32h12"/></svg>
+          <h3>Thoughtful design</h3><p>Interfaces that feel deliberate and intuitive.</p>
+        </article>
+        <article class="principle reveal">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="8" width="18" height="18" rx="4"/><rect x="38" y="38" width="18" height="18" rx="4"/><circle cx="47" cy="17" r="9"/><path d="M26 17h12M17 26v21h21"/></svg>
+          <h3>Practical functionality</h3><p>Software designed to do something genuinely useful.</p>
+        </article>
+        <article class="principle reveal">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 52h14V38h14V24h14V10"/><path d="M42 10h8v8"/><path d="M8 58h48"/></svg>
+          <h3>Continuous improvement</h3><p>Products that evolve through experimentation and refinement.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" aria-labelledby="closingTitle">
+    <picture><source srcset="assets/obryth-emblem.webp" type="image/webp"><img class="closing-emblem" src="assets/obryth-emblem.png" alt="" aria-hidden="true" width="380" height="380" loading="lazy"></picture>
+    <div class="wrap reveal">
+      <h2 id="closingTitle">Something worth exploring.</h2>
+      <p>Discover what Obryth is building.</p>
+      <a class="btn primary lg" href="#/products">Explore Products</a>
+    </div>
   </section>
 </div>
 
@@ -425,10 +493,28 @@
 </div></div>
 </main>
 
-<footer class="site-footer"><div class="wrap">Obryth · Calculations run in your browser. Accounts are provided by Supabase. Estimates only, not financial advice.</div></footer>
+<footer class="site-footer">
+  <div class="wrap foot">
+    <div class="foot-brand">
+      <a href="#/" aria-label="Obryth home"><picture><source srcset="assets/obryth-logo-sm.webp" type="image/webp"><img class="foot-logo" src="assets/obryth-logo-sm.png" alt="Obryth" width="360" height="225" loading="lazy"></picture></a>
+      <p>Calculations run in your browser. Accounts are provided by Supabase. Estimates only, not financial advice.</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="#/products">Products</a>
+      <a href="#/library">Model Library</a>
+      <a href="#/calculator">Calculator</a>
+      <a href="#/studio">Obryth Studio</a>
+      <a href="#/about">About</a>
+      <a href="#/settings">Settings</a>
+      <a class="guest-only" href="#/auth/signin">Sign in</a>
+      <a class="guest-only" href="#/auth/register">Create account</a>
+      <a class="user-only" href="#/account">User Profile</a>
+    </nav>
+  </div>
+</footer>
 
 <!-- Official Supabase client, pinned version (2.76.0). Needs an internet connection. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.76.0/dist/umd/supabase.js"></script>
-<script src="script.js?v=8"></script>
+<script src="script.js?v=9"></script>
 </body>
 </html>
